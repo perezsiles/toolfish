@@ -1,5 +1,6 @@
 package com.example.toolsfish.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,29 +18,47 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.toolsfish.models.*
+import com.example.toolsfish.sensors.LightSensorData
+import com.example.toolsfish.sensors.LightSensorManager
 import com.example.toolsfish.ui.theme.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
- * Pantalla principal de la calculadora de iluminación con diseño moderno
+ * Pantalla principal de la calculadora de iluminación con sensor en tiempo real
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LightCalculatorScreen(
     onNavigateBack: () -> Unit = {}
 ) {
-    var currentIntensity by remember { mutableStateOf(7500) }
+    val context = LocalContext.current
+    val lightSensorManager = remember { LightSensorManager(context) }
+    
+    var currentIntensity by remember { mutableStateOf(0) }
     var currentColorTemp by remember { mutableStateOf(6500) }
     var lightData by remember { mutableStateOf<LightDisplayData?>(null) }
-    var historyItems by remember { mutableStateOf<List<LightHistoryItem>>(emptyList()) }
-    var showAddDialog by remember { mutableStateOf(false) }
+    var sensorData by remember { mutableStateOf<LightSensorData?>(null) }
+    var isSensorActive by remember { mutableStateOf(false) }
+    var hasSensor by remember { mutableStateOf(false) }
+    var showError by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+    
+    val scope = rememberCoroutineScope()
+    
+    // Verificar si el dispositivo tiene sensor de luz
+    LaunchedEffect(Unit) {
+        hasSensor = lightSensorManager.hasLightSensor()
+        if (!hasSensor) {
+            showError = true
+            errorMessage = "Este dispositivo no tiene sensor de luz"
+        }
+    }
     
     // Calcular datos de iluminación cuando cambien los valores
     LaunchedEffect(currentIntensity, currentColorTemp) {
@@ -55,6 +74,22 @@ fun LightCalculatorScreen(
             isOptimalColor = isOptimalColor,
             colorDescription = LightCalculator.getColorTemperatureDescription(currentColorTemp)
         )
+    }
+    
+    // Manejar el flujo del sensor de luz
+    LaunchedEffect(isSensorActive) {
+        if (isSensorActive && hasSensor) {
+            try {
+                lightSensorManager.getLightSensorFlow().collect { data ->
+                    sensorData = data
+                    currentIntensity = data.intensity
+                }
+            } catch (e: Exception) {
+                showError = true
+                errorMessage = "Error al leer el sensor: ${e.message}"
+                isSensorActive = false
+            }
+        }
     }
     
     Column(
@@ -75,19 +110,32 @@ fun LightCalculatorScreen(
         // Header con botón de regreso
         ModernLightHeader(
             title = "Calculadora de Iluminación",
-            subtitle = "Optimiza la iluminación LED para plantas acuáticas",
+            subtitle = "Medición en tiempo real con sensor de luz",
             onNavigateBack = onNavigateBack
+        )
+        
+        // Indicador de estado del sensor
+        SensorStatusCard(
+            hasSensor = hasSensor,
+            isActive = isSensorActive,
+            onToggleSensor = { 
+                isSensorActive = !isSensorActive
+                if (!isSensorActive) {
+                    currentIntensity = 0
+                    sensorData = null
+                }
+            }
         )
         
         // Sección de nivel de luz para plantas
         ModernLightLevelCard(lightData = lightData)
         
-        // Sección de datos actuales
+        // Sección de datos actuales del sensor
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Intensidad
+            // Intensidad del sensor
             ModernCurrentDataCard(
                 icon = Icons.Default.Lightbulb,
                 label = "Intensidad",
@@ -96,7 +144,7 @@ fun LightCalculatorScreen(
                 modifier = Modifier.weight(1f)
             )
             
-            // Temperatura de color
+            // Temperatura de color (manual)
             ModernCurrentDataCard(
                 icon = Icons.Default.Thermostat,
                 label = "Temp. Color",
@@ -106,34 +154,24 @@ fun LightCalculatorScreen(
             )
         }
         
-        // Controles de entrada
-        ModernLightInputControls(
-            intensity = currentIntensity,
+        // Información del sensor
+        sensorData?.let { data ->
+            SensorInfoCard(sensorData = data)
+        }
+        
+        // Controles de temperatura de color (manual)
+        ModernColorTemperatureControls(
             colorTemp = currentColorTemp,
-            onIntensityChange = { currentIntensity = it },
-            onColorTempChange = { currentColorTemp = it },
-            onSaveData = { 
-                showAddDialog = true
-            }
+            onColorTempChange = { currentColorTemp = it }
         )
         
-        // Historial de datos
-        ModernLightHistoryCard(
-            historyItems = historyItems,
-            onViewFullHistory = { /* TODO: Implementar vista completa */ }
-        )
-    }
-    
-    // Dialog para agregar datos
-    if (showAddDialog) {
-        ModernAddLightDataDialog(
-            lightData = lightData,
-            onDismiss = { showAddDialog = false },
-            onSave = { notes ->
-                // TODO: Implementar guardado en base de datos
-                showAddDialog = false
-            }
-        )
+        // Mostrar error si existe
+        if (showError) {
+            ModernErrorCard(
+                errorMessage = errorMessage,
+                onDismiss = { showError = false }
+            )
+        }
     }
 }
 
@@ -980,76 +1018,305 @@ fun ModernHistoryItemRow(item: LightHistoryItem) {
     }
 }
 
+// ========== NUEVAS FUNCIONES PARA SENSOR ==========
+
 /**
- * Dialog para agregar datos de iluminación con diseño moderno
+ * Card que muestra el estado del sensor de luz
  */
 @Composable
-fun ModernAddLightDataDialog(
-    lightData: LightDisplayData?,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
+fun SensorStatusCard(
+    hasSensor: Boolean,
+    isActive: Boolean,
+    onToggleSensor: () -> Unit
 ) {
-    var notes by remember { mutableStateOf("") }
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { 
-            Text(
-                text = "Guardar Medición de Luz",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column {
-                lightData?.let { data ->
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text("Intensidad: ${data.intensity} LUX")
-                            Text("Temperatura: ${data.colorTemperature} K")
-                            Text("Nivel: ${data.level.displayName}")
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isActive) 
+                MaterialTheme.colorScheme.primaryContainer 
+            else 
+                MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (hasSensor) Icons.Default.Sensors else Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = if (hasSensor) {
+                        if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (hasSensor) "Sensor de Luz" else "Sensor No Disponible",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (hasSensor) {
+                            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onError
                         }
-                    }
+                    )
+                    Text(
+                        text = if (hasSensor) {
+                            if (isActive) "Activo - Leyendo datos" else "Inactivo - Toca para activar"
+                        } else {
+                            "Este dispositivo no tiene sensor de luz"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (hasSensor) {
+                            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onError.copy(alpha = 0.8f)
+                        }
+                    )
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notas (opcional)") },
-                    modifier = Modifier.fillMaxWidth(),
+            }
+            
+            if (hasSensor) {
+                Button(
+                    onClick = onToggleSensor,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isActive) 
+                            MaterialTheme.colorScheme.error 
+                        else 
+                            MaterialTheme.colorScheme.primary
+                    ),
                     shape = RoundedCornerShape(12.dp)
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(notes) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Guardar")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                )
-            ) {
-                Text("Cancelar")
+                ) {
+                    Icon(
+                        imageVector = if (isActive) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isActive) "Detener" else "Iniciar",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
-    )
+    }
+}
+
+/**
+ * Card que muestra información detallada del sensor
+ */
+@Composable
+fun SensorInfoCard(sensorData: LightSensorData) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Información del Sensor",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Precisión",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = when (sensorData.accuracy) {
+                            3 -> "Alta"
+                            2 -> "Media"
+                            1 -> "Baja"
+                            else -> "Desconocida"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Column {
+                    Text(
+                        text = "Última lectura",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${(System.currentTimeMillis() - sensorData.timestamp) / 1000}s",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Controles para temperatura de color (manual)
+ */
+@Composable
+fun ModernColorTemperatureControls(
+    colorTemp: Int,
+    onColorTempChange: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Temperatura de Color",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            Text(
+                text = "Ajusta manualmente la temperatura de color (K): $colorTemp",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            Slider(
+                value = colorTemp.toFloat(),
+                onValueChange = { onColorTempChange(it.toInt()) },
+                valueRange = 2000f..10000f,
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.outline
+                )
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Cálido (2000K)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Neutro (6500K)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Frío (10000K)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Card de error moderno con botón de cerrar
+ */
+@Composable
+fun ModernErrorCard(
+    errorMessage: String,
+    onDismiss: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = onDismiss
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cerrar",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
 }
