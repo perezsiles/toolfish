@@ -1,20 +1,28 @@
 package com.example.toolsfish.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.toolsfish.models.*
+import com.example.toolsfish.ui.theme.*
 
 /**
- * Pantalla principal de la calculadora de volumen de acuario
+ * Pantalla principal de la calculadora de volumen de acuario con diseño moderno
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,37 +38,28 @@ fun AquariumCalculatorScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Botón de regreso
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start
-        ) {
-            TextButton(
-                onClick = onNavigateBack
-            ) {
-                Text(
-                    text = "← Menú Principal",
-                    color = MaterialTheme.colorScheme.primary
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
                 )
-            }
-        }
-        
-        // Título
-        Text(
-            text = "🐠 Calculadora de Volumen de Acuario",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.primary
+            )
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Header con botón de regreso
+        ModernHeader(
+            title = "Calculadora de Acuario",
+            subtitle = "Calcula el volumen y parámetros esenciales",
+            onNavigateBack = onNavigateBack
         )
         
         // Selector de tipo de acuario
-        AquariumTypeSelector(
+        ModernAquariumTypeSelector(
             selectedType = selectedType,
             onTypeSelected = { 
                 selectedType = it
@@ -70,14 +69,14 @@ fun AquariumCalculatorScreen(
         )
         
         // Formulario de medidas dinámico
-        DimensionsForm(
+        ModernDimensionsForm(
             type = selectedType,
             dimensions = dimensions,
             onDimensionsChanged = { dimensions = it }
         )
         
-        // Botón de cálculo
-        Button(
+        // Botón de cálculo moderno
+        ModernCalculateButton(
             onClick = {
                 val validationError = AquariumVolumeCalculator.validateDimensions(dimensions, selectedType)
                 if (validationError != null) {
@@ -87,49 +86,85 @@ fun AquariumCalculatorScreen(
                     result = AquariumVolumeCalculator.calculateVolume(selectedType, dimensions)
                     showError = false
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Text(
-                text = "Calcular Volumen",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+            }
+        )
         
         // Mostrar resultado
         result?.let { volumeResult ->
-            VolumeResultCard(volumeResult = volumeResult)
+            ModernVolumeResultCard(volumeResult = volumeResult)
         }
         
         // Mostrar error si existe
         if (showError && errorMessage != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Text(
-                    text = errorMessage!!,
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    textAlign = TextAlign.Center
-                )
-            }
+            ModernErrorCard(errorMessage = errorMessage!!)
         }
     }
 }
 
+@Composable
+fun ModernHeader(
+    title: String,
+    subtitle: String,
+    onNavigateBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Botón de regreso
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            TextButton(
+                onClick = onNavigateBack,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Regresar",
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Menú Principal",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Título principal
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Subtítulo
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
 /**
- * Selector de tipo de acuario usando ComboBox (ExposedDropdownMenuBox)
+ * Selector de tipo de acuario con diseño moderno
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AquariumTypeSelector(
+fun ModernAquariumTypeSelector(
     selectedType: AquariumType,
     onTypeSelected: (AquariumType) -> Unit
 ) {
@@ -139,21 +174,33 @@ fun AquariumTypeSelector(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
-            Text(
-                text = "Tipo de Acuario",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Category,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Tipo de Acuario",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
             
             ExposedDropdownMenuBox(
                 expanded = expanded,
@@ -169,7 +216,12 @@ fun AquariumTypeSelector(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor()
+                        .menuAnchor(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 )
                 
                 ExposedDropdownMenu(
@@ -192,10 +244,10 @@ fun AquariumTypeSelector(
 }
 
 /**
- * Formulario dinámico de medidas según el tipo de acuario
+ * Formulario dinámico de medidas con diseño moderno
  */
 @Composable
-fun DimensionsForm(
+fun ModernDimensionsForm(
     type: AquariumType,
     dimensions: AquariumDimensions,
     onDimensionsChanged: (AquariumDimensions) -> Unit
@@ -204,85 +256,107 @@ fun DimensionsForm(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(20.dp)
         ) {
-            Text(
-                text = "Medidas (en centímetros)",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Straighten,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Medidas (en centímetros)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
             
             when (type) {
                 AquariumType.RECTANGULAR -> {
-                    DimensionField(
+                    ModernDimensionField(
                         label = "Largo",
                         value = dimensions.length,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) },
+                        icon = Icons.Default.ArrowForward
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Ancho",
                         value = dimensions.width,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(width = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(width = it)) },
+                        icon = Icons.Default.ArrowBack
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Alto",
                         value = dimensions.height,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) },
+                        icon = Icons.Default.ArrowUpward
                     )
                 }
                 AquariumType.CYLINDRICAL -> {
-                    DimensionField(
+                    ModernDimensionField(
                         label = "Diámetro",
                         value = dimensions.length,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) },
+                        icon = Icons.Default.RadioButtonUnchecked
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Alto",
                         value = dimensions.height,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) },
+                        icon = Icons.Default.ArrowUpward
                     )
                 }
                 AquariumType.CORNER -> {
-                    DimensionField(
+                    ModernDimensionField(
                         label = "Base",
                         value = dimensions.length,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) },
+                        icon = Icons.Default.CropSquare
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Profundidad",
                         value = dimensions.width,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(width = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(width = it)) },
+                        icon = Icons.Default.ArrowBack
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Alto",
                         value = dimensions.height,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) },
+                        icon = Icons.Default.ArrowUpward
                     )
                 }
                 AquariumType.HEXAGONAL -> {
-                    DimensionField(
+                    ModernDimensionField(
                         label = "Lado",
                         value = dimensions.length,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(length = it)) },
+                        icon = Icons.Default.Hexagon
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DimensionField(
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ModernDimensionField(
                         label = "Alto",
                         value = dimensions.height,
-                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) }
+                        onValueChange = { onDimensionsChanged(dimensions.copy(height = it)) },
+                        icon = Icons.Default.ArrowUpward
                     )
                 }
             }
@@ -291,13 +365,14 @@ fun DimensionsForm(
 }
 
 /**
- * Campo de entrada para dimensiones
+ * Campo de entrada para dimensiones con diseño moderno
  */
 @Composable
-fun DimensionField(
+fun ModernDimensionField(
     label: String,
     value: Double,
-    onValueChange: (Double) -> Unit
+    onValueChange: (Double) -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
     var textValue by remember(value) { mutableStateOf(if (value == 0.0) "" else value.toString()) }
     
@@ -309,63 +384,199 @@ fun DimensionField(
             onValueChange(numericValue)
         },
         label = { Text(label) },
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
             keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
-        )
+        ),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+        ),
+        shape = RoundedCornerShape(12.dp)
     )
 }
 
 /**
- * Tarjeta que muestra el resultado del cálculo
+ * Botón de cálculo con diseño moderno
  */
 @Composable
-fun VolumeResultCard(volumeResult: VolumeResult) {
+fun ModernCalculateButton(
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary
+        ),
+        shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Calculate,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = "Calcular Volumen",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/**
+ * Tarjeta que muestra el resultado del cálculo con diseño moderno
+ */
+@Composable
+fun ModernVolumeResultCard(volumeResult: VolumeResult) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Icono de resultado
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(AquaBlue40, AquaCyan40)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "📊",
+                    fontSize = 32.sp
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Text(
-                text = "📊 Resultado",
-                fontSize = 20.sp,
+                text = "Resultado del Cálculo",
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Volumen en litros
-            Text(
-                text = "Volumen: ${String.format("%.1f", volumeResult.liters)} L",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            
-            // Volumen en galones
-            Text(
-                text = "Equivalente: ${String.format("%.1f", volumeResult.gallons)} galones",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+            ResultItem(
+                label = "Volumen",
+                value = "${String.format("%.1f", volumeResult.liters)} L",
+                icon = Icons.Default.WaterDrop
             )
             
             Spacer(modifier = Modifier.height(12.dp))
+            
+            // Volumen en galones
+            ResultItem(
+                label = "Equivalente",
+                value = "${String.format("%.1f", volumeResult.gallons)} galones",
+                icon = Icons.Default.Scale
+            )
+            
+            Spacer(modifier = Modifier.height(20.dp))
             
             // Descripción detallada
             Text(
                 text = volumeResult.description,
-                fontSize = 14.sp,
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun ResultItem(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
+
+/**
+ * Tarjeta de error con diseño moderno
+ */
+@Composable
+fun ModernErrorCard(errorMessage: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f)
             )
         }
     }
