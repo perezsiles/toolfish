@@ -34,7 +34,8 @@ fun AquariumCalculatorScreen(
     var result by remember { mutableStateOf<VolumeResult?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showError by remember { mutableStateOf(false) }
-    
+    var isCalculated by remember { mutableStateOf(false) } // New state to track if calculation was performed
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -57,46 +58,75 @@ fun AquariumCalculatorScreen(
             subtitle = "Calcula el volumen y parámetros esenciales",
             onNavigateBack = onNavigateBack
         )
-        
-        // Selector de tipo de acuario
-        ModernAquariumTypeSelector(
-            selectedType = selectedType,
-            onTypeSelected = { 
-                selectedType = it
-                dimensions = AquariumDimensions() // Resetear dimensiones al cambiar tipo
-                result = null // Limpiar resultado
-            }
-        )
-        
-        // Formulario de medidas dinámico
-        ModernDimensionsForm(
-            type = selectedType,
-            dimensions = dimensions,
-            onDimensionsChanged = { dimensions = it }
-        )
-        
-        // Botón de cálculo moderno
-        ModernCalculateButton(
-            onClick = {
-                val validationError = AquariumVolumeCalculator.validateDimensions(dimensions, selectedType)
-                if (validationError != null) {
-                    errorMessage = validationError
-                    showError = true
-                } else {
-                    result = AquariumVolumeCalculator.calculateVolume(selectedType, dimensions)
-                    showError = false
+
+        if (!isCalculated) {
+            // Mostrar inputs solo si no se ha calculado
+            // Selector de tipo de acuario
+            ModernAquariumTypeSelector(
+                selectedType = selectedType,
+                onTypeSelected = {
+                    selectedType = it
+                    dimensions = AquariumDimensions() // Resetear dimensiones al cambiar tipo
+                    result = null // Limpiar resultado
                 }
+            )
+
+            // Formulario de medidas dinámico
+            ModernDimensionsForm(
+                type = selectedType,
+                dimensions = dimensions,
+                onDimensionsChanged = { dimensions = it }
+            )
+
+            // Botón de cálculo moderno
+            ModernCalculateButton(
+                onClick = {
+                    val validationError = AquariumVolumeCalculator.validateDimensions(dimensions, selectedType)
+                    if (validationError != null) {
+                        errorMessage = validationError
+                        showError = true
+                    } else {
+                        result = AquariumVolumeCalculator.calculateVolume(selectedType, dimensions)
+                        isCalculated = true
+                        showError = false
+                    }
+                }
+            )
+        } else {
+            // Mostrar resultado cuando está calculado
+            result?.let { volumeResult ->
+                ModernVolumeResultCard(volumeResult = volumeResult)
             }
-        )
-        
-        // Mostrar resultado
-        result?.let { volumeResult ->
-            ModernVolumeResultCard(volumeResult = volumeResult)
+
+            // Botón para volver a calcular
+            Button(
+                onClick = {
+                    isCalculated = false
+                    result = null
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Volver a Calcular")
+            }
         }
-        
+
         // Mostrar error si existe
         if (showError && errorMessage != null) {
-            ModernErrorCard(errorMessage = errorMessage!!)
+            ModernErrorCard(
+                errorMessage = errorMessage!!,
+                onDismiss = { showError = false }
+            )
         }
     }
 }

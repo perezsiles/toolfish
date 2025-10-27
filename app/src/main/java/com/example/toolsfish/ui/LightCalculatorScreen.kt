@@ -44,19 +44,30 @@ fun LightCalculatorScreen(
     var currentColorTemp by remember { mutableStateOf(6500) }
     var lightData by remember { mutableStateOf<LightDisplayData?>(null) }
     var sensorData by remember { mutableStateOf<LightSensorData?>(null) }
-    var isSensorActive by remember { mutableStateOf(false) }
     var hasSensor by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     
     val scope = rememberCoroutineScope()
     
-    // Verificar si el dispositivo tiene sensor de luz
+    // Verificar si el dispositivo tiene sensor de luz y activarlo
+// And update the LaunchedEffect to:
     LaunchedEffect(Unit) {
         hasSensor = lightSensorManager.hasLightSensor()
         if (!hasSensor) {
             showError = true
             errorMessage = "Este dispositivo no tiene sensor de luz"
+        } else {
+            // Iniciar automáticamente el sensor si está disponible
+            try {
+                lightSensorManager.getLightSensorFlow().collect { data ->
+                    sensorData = data
+                    currentIntensity = data.intensity
+                }
+            } catch (e: Exception) {
+                showError = true
+                errorMessage = "Error al leer el sensor: ${e.message}"
+            }
         }
     }
     
@@ -76,21 +87,7 @@ fun LightCalculatorScreen(
         )
     }
     
-    // Manejar el flujo del sensor de luz
-    LaunchedEffect(isSensorActive) {
-        if (isSensorActive && hasSensor) {
-            try {
-                lightSensorManager.getLightSensorFlow().collect { data ->
-                    sensorData = data
-                    currentIntensity = data.intensity
-                }
-            } catch (e: Exception) {
-                showError = true
-                errorMessage = "Error al leer el sensor: ${e.message}"
-                isSensorActive = false
-            }
-        }
-    }
+    // El flujo del sensor ahora se maneja directamente en el LaunchedEffect anterior
     
     Column(
         modifier = Modifier
@@ -117,14 +114,7 @@ fun LightCalculatorScreen(
         // Indicador de estado del sensor
         SensorStatusCard(
             hasSensor = hasSensor,
-            isActive = isSensorActive,
-            onToggleSensor = { 
-                isSensorActive = !isSensorActive
-                if (!isSensorActive) {
-                    currentIntensity = 0
-                    sensorData = null
-                }
-            }
+            isActive = true
         )
         
         // Sección de nivel de luz para plantas
@@ -1023,18 +1013,20 @@ fun ModernHistoryItemRow(item: LightHistoryItem) {
 /**
  * Card que muestra el estado del sensor de luz
  */
+/**
+ * Card que muestra el estado del sensor de luz
+ */
 @Composable
 fun SensorStatusCard(
     hasSensor: Boolean,
-    isActive: Boolean,
-    onToggleSensor: () -> Unit
+    isActive: Boolean = true
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) 
-                MaterialTheme.colorScheme.primaryContainer 
-            else 
+            containerColor = if (hasSensor)
+                MaterialTheme.colorScheme.primaryContainer
+            else
                 MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -1045,71 +1037,42 @@ fun SensorStatusCard(
                 .fillMaxWidth()
                 .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (hasSensor) Icons.Default.Sensors else Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = if (hasSensor) {
-                        if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            Icon(
+                imageVector = if (hasSensor) Icons.Default.Sensors else Icons.Default.Warning,
+                contentDescription = null,
+                tint = if (hasSensor) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = if (hasSensor) "Sensor de Luz" else "Sensor No Disponible",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (hasSensor) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        MaterialTheme.colorScheme.error
-                    },
-                    modifier = Modifier.size(24.dp)
+                        MaterialTheme.colorScheme.onError
+                    }
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = if (hasSensor) "Sensor de Luz" else "Sensor No Disponible",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (hasSensor) {
-                            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                        } else {
-                            MaterialTheme.colorScheme.onError
-                        }
-                    )
-                    Text(
-                        text = if (hasSensor) {
-                            if (isActive) "Activo - Leyendo datos" else "Inactivo - Toca para activar"
-                        } else {
-                            "Este dispositivo no tiene sensor de luz"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (hasSensor) {
-                            if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onError.copy(alpha = 0.8f)
-                        }
-                    )
-                }
-            }
-            
-            if (hasSensor) {
-                Button(
-                    onClick = onToggleSensor,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isActive) 
-                            MaterialTheme.colorScheme.error 
-                        else 
-                            MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isActive) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isActive) "Detener" else "Iniciar",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                Text(
+                    text = if (hasSensor) {
+                        "Leyendo datos del sensor..."
+                    } else {
+                        "Este dispositivo no tiene sensor de luz"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (hasSensor) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                    } else {
+                        MaterialTheme.colorScheme.onError.copy(alpha = 0.8f)
+                    }
+                )
             }
         }
     }
